@@ -8,7 +8,7 @@ const functions = require('firebase-functions');
 // });
 
 exports.createNotification = functions.firestore
-    .document('notifications')
+    .document('notifications/{notificationId}')
     .onCreate((snap, context) => {
         // e.g. {'name': 'Marie', 'age': 66}
         const newValue = snap.data();
@@ -18,14 +18,18 @@ exports.createNotification = functions.firestore
         });
         console.log(userIDs)
 
+        var title = ""
+        var text = ""
         switch (newValue.type) {
             case "concert":
-                const title = "新規ライブ";
-                const text = newValue.artist + "の新しいライブが追加されました!";
+                title = "新規ライブ";
+                text = newValue.artist + "の新しいライブが追加されました!";
+                break;
 
             case "user":
-                const title = "新規フォロワー";
-                const text = "ユーザにフォローされました!";
+                title = "新規フォロワー";
+                text = "ユーザにフォローされました!";
+                break;
         }
 
         const payload = {
@@ -41,7 +45,7 @@ exports.createNotification = functions.firestore
 
             getTargetFcmToken(uid, function (token) {
 
-                if (token == null) {
+                if (token === null) {
                     // 通知OFFのユーザーには通知を打たない
                     console.log(name, "に通知を打たない");
                     return;
@@ -52,46 +56,54 @@ exports.createNotification = functions.firestore
                 pushToDevice(token, payload);
             });
         }
-    });
 
-// TODO: uidを使ってuserのdatabaseを検索
-var getTargetFcmToken = function (uid, callback) {
-    console.log("getTargetFcmToken:");
+        // TODO: uidを使ってuserのdatabaseを検索
+        var getTargetFcmToken = function (uid, callback) {
+            console.log("getTargetFcmToken:");
 
-    const rootRef = teamRef.parent.parent;
-    const userRef = rootRef.child("users").child(uid);
+            const rootRef = teamRef.parent.parent;
+            const userRef = rootRef.child("users").child(uid);
 
-    userRef.once('value').then(function (snapshot) {
-        const isOn = snapshot.val().commentPush;
-        console.log("isOn:", isOn);
+            userRef.once('value').then(function (snapshot) {
+                const isOn = snapshot.val().commentPush;
+                console.log("isOn:", isOn);
 
-        if (isOn == false) {
-            // 通知設定がOFFの場合
-            console.log("return callback null");
-            callback(null);
-            return
+                if (isOn === false) {
+                    // 通知設定がOFFの場合
+                    console.log("return callback null");
+                    callback(null);
+                    return
+                }
+
+                const fcmToken = snapshot.val().fcmToken
+
+                console.log("return callback fcmToken", fcmToken);
+                callback(fcmToken);
+
+                return
+            }).catch(error => { return });
+
+
         }
-        const fcmToken = snapshot.val().fcmToken
 
-        console.log("return callback fcmToken", fcmToken);
-        callback(fcmToken);
+
+        function pushToDevice(token, payload) {
+            console.log("pushToDevice:", token);
+
+            // priorityをhighにしとくと通知打つのが早くなる
+            const options = {
+                priority: "high",
+            };
+
+            admin.messaging().sendToDevice(token, payload, options)
+                .then(pushResponse => {
+                    console.log("Successfully sent message:", pushResponse);
+                    return
+                })
+                .catch(error => {
+                    console.log("Error sending message:", error);
+                    return
+                });
+        }
     });
-}
 
-
-function pushToDevice(token, payload) {
-    console.log("pushToDevice:", token);
-
-    // priorityをhighにしとくと通知打つのが早くなる
-    const options = {
-        priority: "high",
-    };
-
-    admin.messaging().sendToDevice(token, payload, options)
-        .then(pushResponse => {
-            console.log("Successfully sent message:", pushResponse);
-        })
-        .catch(error => {
-            console.log("Error sending message:", error);
-        });
-}
