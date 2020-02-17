@@ -37,21 +37,12 @@ exports.sendNotifications = functions.firestore.document('notifications/{notific
 
         console.log(userIDs)
 
-        // Get the list of device tokens.
-        const allTokens = await admin.firestore().collection('fcmTokens').get();
-        console.log(allTokens)
-        var tokens = [];
-        allTokens.forEach((tokenDoc) => {
-            console.log(tokenDoc.id)
-            tokens.push(tokenDoc.id)
+        userIDs.forEach(function (value) {
+            admin.firestore().collection('fcmTokens').doc(value).get()
+                .then(function (querySnapshot) {
+                    const data = querySnapshot.data()
+                    admin.messaging().sendToDevice(data.fcmToken, payload);
+                    return;
+                }).catch(error => { return });
         });
-
-        console.log(tokens)
-
-        if (tokens.length > 0) {
-            // Send notifications to all tokens.
-            const response = await admin.messaging().sendToDevice(tokens, payload);
-            await cleanupTokens(response, tokens);
-            console.log('Notifications have been sent and tokens cleaned up.');
-        }
     });
