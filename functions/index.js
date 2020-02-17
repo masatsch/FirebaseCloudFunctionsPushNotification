@@ -1,22 +1,11 @@
 const functions = require('firebase-functions');
+const admin = require('firebase-admin');
+admin.initializeApp();
 
-// // Create and Deploy Your First Cloud Functions
-// // https://firebase.google.com/docs/functions/write-firebase-functions
-//
-// exports.helloWorld = functions.https.onRequest((request, response) => {
-//  response.send("Hello from Firebase!");
-// });
-
-exports.createNotification = functions.firestore
-    .document('notifications/{notificationId}')
-    .onCreate((snap, context) => {
-        // e.g. {'name': 'Marie', 'age': 66}
-        const newValue = snap.data();
-
-        const userIDs = newValue.isRead.map(function (value) {
-            return Object.keys(value)
-        });
-        console.log(userIDs)
+exports.sendNotifications = functions.firestore.document('notifications/{notificationId}').onCreate(
+    async (snapshot) => {
+        // Notification details.
+        const newValue = snapshot.data();
 
         var title = ""
         var text = ""
@@ -37,73 +26,32 @@ exports.createNotification = functions.firestore
                 title: title,
                 body: text,
                 content_available: 'true',
-                sound: "default"
+                sound: "default",
+                click_action: `https://${process.env.GCLOUD_PROJECT}.firebaseapp.com`,
             }
         };
 
-        for (uid in userIDs) {
+        const userIDs = newValue.isRead.map(function (value) {
+            return Object.keys(value)[0]
+        });
 
-            getTargetFcmToken(uid, function (token) {
+        console.log(userIDs)
 
-                if (token === null) {
-                    // 通知OFFのユーザーには通知を打たない
-                    console.log(name, "に通知を打たない");
-                    return;
-                }
-                console.log("fcmToken:", token);
+        // Get the list of device tokens.
+        const allTokens = await admin.firestore().collection('fcmTokens').get();
+        console.log(allTokens)
+        var tokens = [];
+        allTokens.forEach((tokenDoc) => {
+            console.log(tokenDoc.id)
+            tokens.push(tokenDoc.id)
+        });
 
-                // tokenが欲しい
-                pushToDevice(token, payload);
-            });
-        }
+        console.log(tokens)
 
-        // TODO: uidを使ってuserのdatabaseを検索
-        var getTargetFcmToken = function (uid, callback) {
-            console.log("getTargetFcmToken:");
-
-            const rootRef = teamRef.parent.parent;
-            const userRef = rootRef.child("users").child(uid);
-
-            userRef.once('value').then(function (snapshot) {
-                const isOn = snapshot.val().commentPush;
-                console.log("isOn:", isOn);
-
-                if (isOn === false) {
-                    // 通知設定がOFFの場合
-                    console.log("return callback null");
-                    callback(null);
-                    return
-                }
-
-                const fcmToken = snapshot.val().fcmToken
-
-                console.log("return callback fcmToken", fcmToken);
-                callback(fcmToken);
-
-                return
-            }).catch(error => { return });
-
-
-        }
-
-
-        function pushToDevice(token, payload) {
-            console.log("pushToDevice:", token);
-
-            // priorityをhighにしとくと通知打つのが早くなる
-            const options = {
-                priority: "high",
-            };
-
-            admin.messaging().sendToDevice(token, payload, options)
-                .then(pushResponse => {
-                    console.log("Successfully sent message:", pushResponse);
-                    return
-                })
-                .catch(error => {
-                    console.log("Error sending message:", error);
-                    return
-                });
+        if (tokens.length > 0) {
+            // Send notifications to all tokens.
+            const response = await admin.messaging().sendToDevice(tokens, payload);
+            await cleanupTokens(response, tokens);
+            console.log('Notifications have been sent and tokens cleaned up.');
         }
     });
-
