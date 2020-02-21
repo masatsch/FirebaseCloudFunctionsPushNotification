@@ -17,7 +17,7 @@ exports.sendNotifications = functions.firestore.document('notifications/{notific
 
             case "user":
                 title = "新規フォロワー";
-                text = "ユーザにフォローされました!";
+                text = newValue.artist + "にフォローされました!";
                 break;
         }
 
@@ -31,13 +31,10 @@ exports.sendNotifications = functions.firestore.document('notifications/{notific
             }
         };
 
-        const userIDs = newValue.isRead.map(function (value) {
-            return Object.keys(value)[0]
-        });
 
-        console.log(userIDs)
+        console.log(newValue.users)
 
-        userIDs.forEach(function (value) {
+        newValue.users.forEach(function (value) {
             admin.firestore().collection('fcmTokens').doc(value).get()
                 .then(function (querySnapshot) {
                     const data = querySnapshot.data()
