@@ -1,6 +1,7 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
-admin.initializeApp();
+const serviceAccount = require("./credential.json");
+admin.initializeApp({credential: admin.credential.cert(serviceAccount)});
 
 exports.sendNotifications = functions.firestore.document('notifications/{notificationId}').onCreate(
     async (snapshot) => {
@@ -22,7 +23,7 @@ exports.sendNotifications = functions.firestore.document('notifications/{notific
 
             case "message":
                 title = "新規メッセージ";
-                text = newValue.artist + "からメッセージが届きました!";
+                text = newValue.artist;
                 break;
             
             default:
@@ -40,8 +41,10 @@ exports.sendNotifications = functions.firestore.document('notifications/{notific
             }
         };
 
+        console.log(process.env.GCLOUD_PROJECT);
 
-        console.log(newValue.users)
+
+        console.log(`users: ${newValue.users}, title: ${title}, text: ${text}`);
 
         newValue.users.forEach((value) => {
             admin.firestore().collection('fcmTokens').doc(value).get()
@@ -49,6 +52,6 @@ exports.sendNotifications = functions.firestore.document('notifications/{notific
                     const data = querySnapshot.data()
                     admin.messaging().sendToDevice(data.fcmToken, payload);
                     return;
-                }).catch(error => { return });
+                }).catch(error => { console.log(`ERROR: ${error}`); return });
         });
     });
