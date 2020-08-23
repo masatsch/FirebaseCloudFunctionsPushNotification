@@ -19,6 +19,15 @@ exports.sendNotifications = functions.firestore.document('notifications/{notific
                 title = "新規フォロワー";
                 text = newValue.artist + "にフォローされました!";
                 break;
+
+            case "message":
+                title = "新規メッセージ";
+                text = newValue.artist + "からメッセージが届きました!";
+                break;
+            
+            default:
+                title = "新規通知";
+                text = newValue.artist;
         }
 
         const payload = {
@@ -34,9 +43,9 @@ exports.sendNotifications = functions.firestore.document('notifications/{notific
 
         console.log(newValue.users)
 
-        newValue.users.forEach(function (value) {
+        newValue.users.forEach((value) => {
             admin.firestore().collection('fcmTokens').doc(value).get()
-                .then(function (querySnapshot) {
+                .then((querySnapshot) => {
                     const data = querySnapshot.data()
                     admin.messaging().sendToDevice(data.fcmToken, payload);
                     return;
